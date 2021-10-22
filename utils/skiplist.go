@@ -11,6 +11,7 @@ import (
 
 const (
 	defaultMaxLevel = 48
+	p               = 0.5
 )
 
 type SkipList struct {
@@ -58,6 +59,9 @@ func (elem *Element) Entry() *codec.Entry {
 }
 
 func (list *SkipList) Add(data *codec.Entry) error {
+	// 加锁支持并发
+	list.lock.Lock()
+	defer list.lock.Unlock()
 	// 添加不用判空
 
 	// 拿到链表头
@@ -97,8 +101,6 @@ func (list *SkipList) Add(data *codec.Entry) error {
 			prevElem = next
 			prevElemHeaders[i] = prevElem
 
-
-
 		}
 
 		// i--
@@ -126,6 +128,9 @@ func (list *SkipList) Add(data *codec.Entry) error {
 }
 
 func (list *SkipList) Search(key []byte) (e *codec.Entry) {
+	// 加锁支持并发
+	list.lock.RLock()
+	defer list.lock.RUnlock()
 	// 链表是否为空
 	if list.length == 0 {
 		return nil
@@ -202,18 +207,73 @@ func (list *SkipList) compare(score float64, key []byte, next *Element) int {
 	}
 }
 
+const INT_MAX = int(^uint(0) >> 1)
+
 func (list *SkipList) randLevel() int {
-	for i := 0; ; i++ {
-		if rand.Intn(2) == 0 {
-			return i
+	/*
+		// basic
+		for i := 0; ; i++ {
+			if rand.Intn(2) == 0 {
+				return i
+			}
 		}
+	*/
+
+	/*
+		// logic: Benchmark_randLevel-8   	29245941	        39.46 ns/op
+		if list.maxLevel <= 1 {
+			return 1
+		}
+
+		i := 1
+
+		for ; i < list.maxLevel; i++ {
+			if RandN(1000)%2 == 0 {
+				return i
+			}
+		}
+		return i
+	*/
+
+	/*
+		// redis-1
+		l := 1
+		// 随机选取 [0, INT_MAX) 的数与(1111 1111 1111 1111)0xFFFF 进行位运算, 50%的概率为0
+		// 0 小与 1/2 * 0xFFFF，也就是说有n层的概率为 (1/2)^n
+		//for (float64(rand.Intn(int(^uint(0)>>1)) & 0xFFFF)) < (p * 0xFFFF) {
+		//for float64(rand.Int()&0xFFFF) < (p * 0xFFFF) { // Benchmark_randLevel-8   	37296114	        31.66 ns/op
+		for float64(RandN(INT_MAX)&0xFFFF) < (p * 0xFFFF) { // Benchmark_randLevel-8   	25134420	        45.62 ns/op
+			l++
+		}
+		if l < defaultMaxLevel {
+			return l
+		} else {
+			return defaultMaxLevel
+		}
+	*/
+
+	// redis-2: Benchmark_randLevel-8   	36378151	        31.65 ns/op
+	l := 1
+	for Float64() < p {
+		l++
 	}
+	if l < defaultMaxLevel {
+		return l
+	} else {
+		return defaultMaxLevel
+	}
+
+	// levelDB
 }
 
 func (list *SkipList) Size() int64 {
-	var size int64
-	for next := list.header.levels[0]; next != nil; next = next.levels[0] {
-		size += next.entry.Size()
-	}
-	return size
+	/*
+		var size int64
+		for next := list.header.levels[0]; next != nil; next = next.levels[0] {
+			size += next.entry.Size()
+		}
+		return size
+	*/
+
+	return list.size
 }

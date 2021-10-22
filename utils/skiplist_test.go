@@ -2,11 +2,12 @@ package utils
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+
 	"github.com/hardcore-os/corekv/utils/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"sync"
-	"testing"
 )
 
 func RandString(len int) string {
@@ -141,4 +142,19 @@ func Benchmark_ConcurrentBasic(b *testing.B) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestSkipList_randLevel(t *testing.T) {
+	list := NewSkipList()
+	for i := 0; i < 10000; i++ {
+		fmt.Printf("i -> [%d]\n", list.randLevel())
+	}
+}
+
+func Benchmark_randLevel(b *testing.B) {
+	// 1. redis-1 == redis-2
+	list := NewSkipList()
+	for n := 0; n < b.N; n++ {
+		list.randLevel()
+	}
 }
